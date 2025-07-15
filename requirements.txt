@@ -4,3 +4,4 @@ pycoingecko
 python-dotenv
 langchain
 langchain-community
+pandas
