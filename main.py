@@ -40,7 +40,7 @@ def fetch_prices():
     data = {}
 
 # Stocks (Yahoo Finance)
-    for t in SP500_TICKERS:
+   for t in SP500_TICKERS:
         try:
         hist = yf.Ticker(t).history(period="1h", interval="5m")['Close'].dropna().tolist()
         data[t] = hist[-6:] if len(hist) >= 6 else hist
