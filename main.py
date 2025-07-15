@@ -15,19 +15,19 @@ from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
 import requests
 
 # TEMP test code for Telegram
-def test_telegram():
-    BOT_TOKEN = "7766044269:AAGMBoKYt8DZYjDvQIWkRyL8Neuqa_rCTIY"
-    CHAT_ID = "6574517543"
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": "✅ Test message from your trading bot!"
-    }
-    response = requests.post(url, data=payload)
-    print("Telegram test response:", response.json())
+# def test_telegram():
+  #  BOT_TOKEN = "7766044269:AAGMBoKYt8DZYjDvQIWkRyL8Neuqa_rCTIY"
+   # CHAT_ID = "6574517543"
+    # url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    # payload = {
+      #  "chat_id": CHAT_ID,
+       # "text": "✅ Test message from your trading bot!"
+   # }
+ #   response = requests.post(url, data=payload)
+  #  print("Telegram test response:", response.json())
 
 # Call the test
-test_telegram()
+# test_telegram()
 
 # Load env
 load_dotenv()
@@ -69,14 +69,13 @@ def fetch_prices():
     return data
 
 def analyze(prices):
-    if len(prices) < 20: return None
-    sma5 = sum(prices[-5:])/5
-    sma20 = sum(prices[-20:])/20
-    rsi = calc_rsi(prices)
-    std = statistics.stdev(prices[-20:])
-    width = std/sma20
-    if sma5> sma20 and rsi<35 and width<0.02: return "BUY"
-    if sma5< sma20 and rsi>65: return "SELL"
+    if len(prices) < 2:
+        return None
+    change = ((prices[-1] - prices[0]) / prices[0]) * 100
+    if change >= 1.0:
+        return f"BUY (+{change:.2f}%)"
+    elif change <= -1.0:
+        return f"SELL ({change:.2f}%)"
     return None
 
 def calc_rsi(prices, period=14):
@@ -92,16 +91,16 @@ def scan():
         if act:
             news = news_tool.run(symbol)[:3]
             summary = "\n".join([f"- {n['title']}" for n in news])
-            send(f"{act} {symbol}\n{summary}")
+            send(f"{act} signal for {symbol}\n{summary}")
 
 def main():
-    send("Bot started")
+    send("🤖 Bot started (scanning every 5 minutes)")
     while True:
         try:
             scan()
         except Exception as e:
-            send(f"Error: {e}")
-        time.sleep(60*30)
+            send(f"⚠️ Error: {e}")
+        time.sleep(300)  # 5 minutes
 
 if __name__ == "__main__":
     main()
