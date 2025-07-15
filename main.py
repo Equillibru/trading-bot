@@ -51,9 +51,10 @@ def fetch_prices():
     for t in SP500_TICKERS:
         try:
             hist = yf.Ticker(t).history(period="1h", interval="5m")['Close'].dropna().tolist()
-            data[t] = hist[-6:] if len(hist) >= 6 else hist
+            if len(hist) >= 2:
+                data[t] = hist[-6:]
         except Exception as e:
-            print(f"⚠️ Error fetching stock {t}: {e}")
+            print(f"⚠️ Could not fetch {t}: {e}")
 
     # Fetch crypto data from Binance
     for symbol in BINANCE_CRYPTO:
@@ -82,15 +83,19 @@ def analyze(prices):
 def scan():
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
     data = fetch_prices()
+
     for symbol, prices in data.items():
         signal = analyze(prices)
-        if signal:
+        if signal:  # Only send if BUY or SELL is detected
             try:
                 news = news_tool.run(symbol[:10])[:3]
                 summary = "\n".join([f"- {n['title']}" for n in news]) if news else "No headlines"
             except Exception:
                 summary = "📰 News unavailable"
-            send(f"{signal} signal for {symbol} at {now}\n{summary}")
+
+            message = f"{signal} signal for {symbol} at {now}\n{summary}"
+            send(message)
+
 
 # Main loop: refresh every 5 minutes
 def main():
