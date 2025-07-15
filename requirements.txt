@@ -1,7 +1,6 @@
 requests
 yfinance
-- coingecko-api
-+ pycoingecko
+pycoingecko
 python-dotenv
-langchain 
+langchain
 langchain-community
