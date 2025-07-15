@@ -39,14 +39,15 @@ def send(msg):
 def fetch_prices():
     data = {}
 
-    # Stocks (Yahoo Finance)
+# Stocks (Yahoo Finance)
     for t in SP500_TICKERS:
-    try:
+        try:
         hist = yf.Ticker(t).history(period="1h", interval="5m")['Close'].dropna().tolist()
         data[t] = hist[-6:] if len(hist) >= 6 else hist
     except Exception as e:
         print(f"⚠️ Error fetching stock {t}: {e}")
-    # Crypto (Binance)
+
+# Crypto (Binance)
     for symbol in BINANCE_CRYPTO:
         try:
             url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=6"
