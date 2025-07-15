@@ -24,10 +24,14 @@ SP500_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]  # top 5 S&P 500 stock
 CRYPTO_TOP25 = [c['id'] for c in cg.get_coins_markets(vs_currency='usd', per_page=25, page=1)]
 
 def get_sp500_tickers():
-    table = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
-    return table[0]['Symbol'].tolist()
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    tables = pd.read_html(url)
+    tickers = tables[0]["Symbol"].tolist()
+    tickers = [t.replace('.', '-') for t in tickers]  # Yahoo format
+    return tickers
 
 SP500_TICKERS = get_sp500_tickers()
+
 def send(msg):
     requests.post(
         f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
