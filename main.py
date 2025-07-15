@@ -13,6 +13,8 @@ from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+os.environ['USER_AGENT'] = 'TradingBot/1.0 (contact@example.com)'
+os.environ['USER_AGENT'] = 'TradingBot/1.0'
 
 # Initialize APIs
 cg = CoinGeckoAPI()
