@@ -56,7 +56,6 @@ def fetch_prices():
             data[symbol] = prices
         except Exception as e:
             print(f"⚠️ Error fetching crypto {symbol}: {e}")
-
     return data
 
 # Analyze movement
