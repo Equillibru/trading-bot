@@ -4,6 +4,7 @@ import datetime
 import statistics
 import requests
 import yfinance as yf
+import pandas as pd
 from pycoingecko import CoinGeckoAPI
 from dotenv import load_dotenv
 from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
@@ -17,9 +18,14 @@ TELEGRAM_CHAT_ID = os.getenv("6574517543")
 cg = CoinGeckoAPI()
 news_tool = YahooFinanceNewsTool()
 
-SP500_TICKERS = yf.Tickers(" ".join(yf.tickers_sp500().tickers.keys())).tickers[:500]
+SP500_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]  # top 5 S&P 500 stocks
 CRYPTO_TOP25 = [c['id'] for c in cg.coins_markets(vs_currency='usd', per_page=25, page=1)]
 
+def get_sp500_tickers():
+    table = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
+    return table[0]['Symbol'].tolist()
+
+SP500_TICKERS = get_sp500_tickers()
 def send(msg):
     requests.post(
         f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
