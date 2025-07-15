@@ -2,73 +2,73 @@ import os
 import time
 import datetime
 import requests
-import yfinance as yf
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
-
-# Set user-agent for requests
-os.environ['USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TradingBot/1.0'
-print("✅ USER_AGENT is set to:", os.environ['USER_AGENT'])
 
 # Load environment variables
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+FINNHUB_KEY = os.getenv("FINNHUB_KEY")
+
+# Set USER_AGENT
+os.environ['USER_AGENT'] = 'Mozilla/5.0 (TradingBot)'
 
 # Initialize news tool
 news_tool = YahooFinanceNewsTool()
 
-# Get full list of S&P 500 tickers
-def get_sp500_tickers():
-    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-    tables = pd.read_html(url)
-    tickers = tables[0]["Symbol"].tolist()
-    tickers = [t.replace('.', '-') for t in tickers]
-    return tickers
-
-SP500_TICKERS = get_sp500_tickers()
-
-# Binance top crypto pairs
+# Binance crypto pairs (top 10)
 BINANCE_CRYPTO = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "ADAUSDT",
     "XRPUSDT", "DOGEUSDT", "AVAXUSDT", "MATICUSDT", "LINKUSDT"
 ]
 
-# Telegram alert sender
+# S&P 500 Tickers from Wikipedia (symbols only)
+def get_sp500_tickers():
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    tables = pd.read_html(url)
+    tickers = tables[0]["Symbol"].tolist()
+    return tickers
+
+SP500_TICKERS = get_sp500_tickers()
+
+# Send Telegram alert
 def send(msg):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
     except Exception as e:
-        print(f"⚠️ Failed to send Telegram message: {e}")
+        print(f"Telegram send error: {e}")
 
-# Fetch historical prices
-def fetch_prices():
-    data = {}
+# Fetch stock prices using Finnhub
+def get_stock_prices_finnhub(symbol):
+    try:
+        url = "https://finnhub.io/api/v1/stock/candle"
+        params = {
+            "symbol": symbol,
+            "resolution": "5",
+            "count": 6,
+            "token": FINNHUB_KEY
+        }
+        r = requests.get(url, params=params).json()
+        if r.get("s") == "ok":
+            return r["c"]
+    except Exception as e:
+        print(f"Finnhub error for {symbol}: {e}")
+    return []
 
-    # Fetch stock data
-    for t in SP500_TICKERS:
-        try:
-            hist = yf.Ticker(t).history(period="1h", interval="5m")['Close'].dropna().tolist()
-            if len(hist) >= 2:
-                data[t] = hist[-6:]
-        except Exception as e:
-            print(f"⚠️ Could not fetch {t}: {e}")
+# Fetch crypto prices using Binance
+def get_crypto_prices_binance(symbol):
+    try:
+        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=6"
+        r = requests.get(url).json()
+        return [float(kline[4]) for kline in r]  # closing prices
+    except Exception as e:
+        print(f"Binance error for {symbol}: {e}")
+        return []
 
-    # Fetch crypto data from Binance
-    for symbol in BINANCE_CRYPTO:
-        try:
-            url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=6"
-            response = requests.get(url).json()
-            prices = [float(kline[4]) for kline in response]  # closing prices
-            data[symbol] = prices
-        except Exception as e:
-            print(f"⚠️ Error fetching crypto {symbol}: {e}")
-
-    return data
-
-# Analyze movement
+# Analyze % change
 def analyze(prices):
     if len(prices) < 2:
         return None
@@ -79,33 +79,38 @@ def analyze(prices):
         return f"SELL ({change:.2f}%)"
     return None
 
-# Scan all symbols and send alerts
+# Main scan function
 def scan():
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-    data = fetch_prices()
 
-    for symbol, prices in data.items():
+    # Scan stocks
+    for symbol in SP500_TICKERS:
+        prices = get_stock_prices_finnhub(symbol)
         signal = analyze(prices)
-        if signal:  # Only send if BUY or SELL is detected
+        if signal:
             try:
-                news = news_tool.run(symbol[:10])[:3]
+                news = news_tool.run(symbol)[:3]
                 summary = "\n".join([f"- {n['title']}" for n in news]) if news else "No headlines"
-            except Exception:
+            except:
                 summary = "📰 News unavailable"
+            send(f"{signal} signal for {symbol} at {now}\n{summary}")
 
-            message = f"{signal} signal for {symbol} at {now}\n{summary}"
-            send(message)
+    # Scan crypto
+    for symbol in BINANCE_CRYPTO:
+        prices = get_crypto_prices_binance(symbol)
+        signal = analyze(prices)
+        if signal:
+            send(f"{signal} signal for {symbol} at {now}")
 
-
-# Main loop: refresh every 5 minutes
+# Bot loop
 def main():
-    send("🤖 Trading bot started (5-min scanner using Binance & Yahoo)")
+    send("🤖 Trading bot started (Finnhub + Binance)")
     while True:
         try:
             scan()
         except Exception as e:
-            send(f"⚠️ Error: {e}")
-        time.sleep(300)
+            send(f"⚠️ Bot error: {e}")
+        time.sleep(300)  # wait 5 min
 
 if __name__ == "__main__":
     main()
