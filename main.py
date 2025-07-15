@@ -7,47 +7,55 @@ import pandas as pd
 from dotenv import load_dotenv
 from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
 
-# Set user-agent
+# Set user-agent for requests
 os.environ['USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TradingBot/1.0'
+print("✅ USER_AGENT is set to:", os.environ['USER_AGENT'])
 
-
-# Load env
+# Load environment variables
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-os.environ['USER_AGENT'] = 'TradingBot/1.0 (rk.ionescu@gmail.com'
-os.environ['USER_AGENT'] = 'TradingBot/1.0'
 
-# Initialize APIs
+# Initialize news tool
 news_tool = YahooFinanceNewsTool()
 
-# Binance crypto symbols (top 10, can be extended)
-BINANCE_CRYPTO = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "ADAUSDT", "XRPUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "MATICUSDT"]
+# Get full list of S&P 500 tickers
+def get_sp500_tickers():
+    url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+    tables = pd.read_html(url)
+    tickers = tables[0]["Symbol"].tolist()
+    tickers = [t.replace('.', '-') for t in tickers]
+    return tickers
 
-# Telegram alert
+SP500_TICKERS = get_sp500_tickers()
+
+# Binance top crypto pairs
+BINANCE_CRYPTO = [
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "ADAUSDT",
+    "XRPUSDT", "DOGEUSDT", "AVAXUSDT", "MATICUSDT", "LINKUSDT"
+]
+
+# Telegram alert sender
 def send(msg):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
-        response = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            data={"chat_id": TELEGRAM_CHAT_ID, "text": msg}
-        )
-        response.raise_for_status()
+        requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
     except Exception as e:
-        print(f"Failed to send message: {e}")
+        print(f"⚠️ Failed to send Telegram message: {e}")
 
-# Fetch price history
+# Fetch historical prices
 def fetch_prices():
     data = {}
 
-# Stocks (Yahoo Finance)
-   for t in SP500_TICKERS:
-       try:
-           hist = yf.Ticker(t).history(period="1h", interval="5m")['Close'].dropna().tolist()
-           data[t] = hist[-6:] if len(hist) >= 6 else hist
-       except Exception as e:
-       print(f"⚠️ Error fetching stock {t}: {e}")
+    # Fetch stock data
+    for t in SP500_TICKERS:
+        try:
+            hist = yf.Ticker(t).history(period="1h", interval="5m")['Close'].dropna().tolist()
+            data[t] = hist[-6:] if len(hist) >= 6 else hist
+        except Exception as e:
+            print(f"⚠️ Error fetching stock {t}: {e}")
 
-# Crypto (Binance)
+    # Fetch crypto data from Binance
     for symbol in BINANCE_CRYPTO:
         try:
             url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=6"
@@ -56,12 +64,13 @@ def fetch_prices():
             data[symbol] = prices
         except Exception as e:
             print(f"⚠️ Error fetching crypto {symbol}: {e}")
+
     return data
 
 # Analyze movement
 def analyze(prices):
-    if len(prices) < period + 1:
-    return None
+    if len(prices) < 2:
+        return None
     change = ((prices[-1] - prices[0]) / prices[0]) * 100
     if change >= 1.0:
         return f"BUY (+{change:.2f}%)"
@@ -69,7 +78,7 @@ def analyze(prices):
         return f"SELL ({change:.2f}%)"
     return None
 
-# Scan all assets
+# Scan all symbols and send alerts
 def scan():
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
     data = fetch_prices()
@@ -77,20 +86,20 @@ def scan():
         signal = analyze(prices)
         if signal:
             try:
-                news = news_tool.run(symbol[:10])[:3]  # Limit symbol length for crypto
+                news = news_tool.run(symbol[:10])[:3]
                 summary = "\n".join([f"- {n['title']}" for n in news]) if news else "No headlines"
             except Exception:
                 summary = "📰 News unavailable"
             send(f"{signal} signal for {symbol} at {now}\n{summary}")
 
-# Loop every 5 minutes
+# Main loop: refresh every 5 minutes
 def main():
-    send("🤖 Bot started (Binance + Yahoo | 5-min refresh)")
+    send("🤖 Trading bot started (5-min scanner using Binance & Yahoo)")
     while True:
         try:
             scan()
         except Exception as e:
-            send(f"⚠️ Scan error: {e}")
+            send(f"⚠️ Error: {e}")
         time.sleep(300)
 
 if __name__ == "__main__":
