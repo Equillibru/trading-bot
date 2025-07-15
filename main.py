@@ -73,9 +73,9 @@ def analyze(prices):
     if len(prices) < 2:
         return None
     change = ((prices[-1] - prices[0]) / prices[0]) * 100
-    if change >= 1.0:
+    if change >= 0.5:
         return f"BUY (+{change:.2f}%)"
-    elif change <= -1.0:
+    elif change <= -0.5:
         return f"SELL ({change:.2f}%)"
     return None
 
