@@ -3,6 +3,20 @@ import time
 import datetime
 import requests
 import pandas as pd
+import json
+
+POSITION_FILE = "positions.json"
+
+def load_positions():
+    if os.path.exists(POSITION_FILE):
+        with open(POSITION_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_positions(data):
+    with open(POSITION_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+        
 from dotenv import load_dotenv
 from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
 
@@ -83,17 +97,29 @@ def analyze(prices):
 def scan():
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
-    # Scan stocks
-    for symbol in SP500_TICKERS:
-        prices = get_stock_prices_finnhub(symbol)
-        signal = analyze(prices)
-        if signal:
-            try:
-                news = news_tool.run(symbol)[:3]
-                summary = "\n".join([f"- {n['title']}" for n in news]) if news else "No headlines"
-            except:
-                summary = "📰 News unavailable"
-            send(f"{signal} signal for {symbol} at {now}\n{summary}")
+# Scan stocks
+for symbol in SP500_TICKERS:
+    prices = get_stock_prices_finnhub(symbol)
+    signal = analyze(prices)
+    current_price = prices[-1] if prices else None
+
+    # Entry signal
+    if signal and signal.startswith("BUY") and symbol not in positions:
+        send(f"{signal} signal for {symbol} at {now}")
+        positions[symbol] = {"type": "BUY", "entry": current_price, "time": now}
+        save_positions(positions)
+
+    # Exit signal (take profit / stop loss)
+    elif symbol in positions:
+        entry = positions[symbol]['entry']
+        change = ((current_price - entry) / entry) * 100 if entry else 0
+        if change >= 5:
+            send(f"🎯 TAKE PROFIT: {symbol} is up {change:.2f}% since buy at {entry}")
+            del positions[symbol]
+        elif change <= -3:
+            send(f"🛑 STOP LOSS: {symbol} is down {change:.2f}% since buy at {entry}")
+            del positions[symbol]
+        save_positions(positions)
 
     # Scan crypto
     for symbol in BINANCE_CRYPTO:
