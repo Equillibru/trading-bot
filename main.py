@@ -41,12 +41,11 @@ def fetch_prices():
 
     # Stocks (Yahoo Finance)
     for t in SP500_TICKERS:
-        try:
-            hist = yf.Ticker(t).history(period="1h", interval="5m")['Close'].dropna().tolist()
-            data[t] = hist[-6:] if len(hist) >= 6 else hist
-        except Exception as e:
-            print(f"⚠️ Error fetching stock {t}: {e}")
-
+    try:
+        hist = yf.Ticker(t).history(period="1h", interval="5m")['Close'].dropna().tolist()
+        data[t] = hist[-6:] if len(hist) >= 6 else hist
+    except Exception as e:
+        print(f"⚠️ Error fetching stock {t}: {e}")
     # Crypto (Binance)
     for symbol in BINANCE_CRYPTO:
         try:
