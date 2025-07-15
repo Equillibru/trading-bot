@@ -19,7 +19,7 @@ cg = CoinGeckoAPI()
 news_tool = YahooFinanceNewsTool()
 
 SP500_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]  # top 5 S&P 500 stocks
-CRYPTO_TOP25 = [c['id'] for c in cg.coins_markets(vs_currency='usd', per_page=25, page=1)]
+CRYPTO_TOP25 = [c['id'] for c in cg.get_coins_markets(vs_currency='usd', per_page=25, page=1)]
 
 def get_sp500_tickers():
     table = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")
