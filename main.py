@@ -57,15 +57,16 @@ def save_positions(data):
 def get_finnhub_prices(symbol):
     try:
         now = int(time.time())
-        one_day_ago = now - 60 * 60 * 24
+        start_of_today = now - (now % 86400)  # midnight UTC today
         seven_days_ago = now - 60 * 60 * 24 * 7
 
-        # Get intraday data for today
+        # 5-minute interval for today
         intraday_url = "https://finnhub.io/api/v1/stock/candle"
-        daily = requests.get(intraday_url, params={
+
+        intraday = requests.get(intraday_url, params={
             "symbol": symbol,
-            "resolution": "D",
-            "from": one_day_ago,
+            "resolution": "5",
+            "from": start_of_today,
             "to": now,
             "token": FINNHUB_KEY
         }).json()
@@ -78,13 +79,14 @@ def get_finnhub_prices(symbol):
             "token": FINNHUB_KEY
         }).json()
 
-        today_open = daily['o'][-1] if 'o' in daily and daily['o'] else None
+        # use open price of the first 5-min candle today
+        today_open = intraday['o'][0] if 'o' in intraday and intraday['o'] else None
+        current_price = intraday['c'][-1] if 'c' in intraday and intraday['c'] else None
         week_ago_price = weekly['c'][0] if 'c' in weekly and weekly['c'] else None
-        current_price = daily['c'][-1] if 'c' in daily and daily['c'] else None
 
         return current_price, today_open, week_ago_price
     except Exception as e:
-        print(f"Finnhub error for {symbol}: {e}")
+        print(f"Finnhub intraday error for {symbol}: {e}")
         return None, None, None
 
 # Binance crypto prices
