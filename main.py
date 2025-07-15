@@ -20,10 +20,10 @@ os.environ['USER_AGENT'] = 'Mozilla/5.0 (TradingBot)'
 # News tool
 news_tool = YahooFinanceNewsTool()
 
-# Binance crypto pairs
+# Crypto tickers (Binance format)
 BINANCE_CRYPTO = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "ADAUSDT",
-    "XRPUSDT", "DOGEUSDT", "AVAXUSDT", "MATICUSDT", "LINKUSDT"
+    "XRPUSDT", "DOGEUSDT", "AVAXUSDT", "MATICUSDT", "LINKUSDT", "DOGEUSDT"
 ]
 
 # Get S&P 500 tickers
@@ -34,7 +34,7 @@ def get_sp500_tickers():
 
 SP500_TICKERS = get_sp500_tickers()
 
-# Telegram sender
+# Telegram
 def send(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -53,80 +53,102 @@ def save_positions(data):
     with open(POSITION_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
-# Get stock prices from Finnhub
-def get_stock_prices_finnhub(symbol):
+# Finnhub daily and weekly prices
+def get_finnhub_prices(symbol):
     try:
-        url = "https://finnhub.io/api/v1/stock/candle"
-        params = {
+        now = int(time.time())
+        one_day_ago = now - 60 * 60 * 24
+        seven_days_ago = now - 60 * 60 * 24 * 7
+
+        # Get intraday data for today
+        intraday_url = "https://finnhub.io/api/v1/stock/candle"
+        daily = requests.get(intraday_url, params={
             "symbol": symbol,
-            "resolution": "5",
-            "count": 6,
+            "resolution": "D",
+            "from": one_day_ago,
+            "to": now,
             "token": FINNHUB_KEY
-        }
-        r = requests.get(url, params=params).json()
-        if r.get("s") == "ok":
-            return r["c"]
+        }).json()
+
+        weekly = requests.get(intraday_url, params={
+            "symbol": symbol,
+            "resolution": "D",
+            "from": seven_days_ago,
+            "to": now,
+            "token": FINNHUB_KEY
+        }).json()
+
+        today_open = daily['o'][-1] if 'o' in daily and daily['o'] else None
+        week_ago_price = weekly['c'][0] if 'c' in weekly and weekly['c'] else None
+        current_price = daily['c'][-1] if 'c' in daily and daily['c'] else None
+
+        return current_price, today_open, week_ago_price
     except Exception as e:
         print(f"Finnhub error for {symbol}: {e}")
-    return []
+        return None, None, None
 
-# Get crypto prices from Binance
-def get_crypto_prices_binance(symbol):
+# Binance crypto prices
+def get_binance_prices(symbol):
     try:
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=5m&limit=6"
+        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1d&limit=7"
         r = requests.get(url).json()
-        return [float(kline[4]) for kline in r]
+        today_open = float(r[-1][1])  # Open of latest candle
+        week_ago_close = float(r[0][4])  # Close 7 days ago
+        current_price = float(r[-1][4])  # Close of today
+        return current_price, today_open, week_ago_close
     except Exception as e:
         print(f"Binance error for {symbol}: {e}")
-        return []
+        return None, None, None
 
-# Analyze movement
-def analyze(prices):
-    if len(prices) < 2:
+# Analyze both daily and 7-day trends
+def analyze_trends(current, day_open, week_old):
+    if not all([current, day_open, week_old]):
         return None
-    change = ((prices[-1] - prices[0]) / prices[0]) * 100
-    if change >= 1.0:
-        return f"BUY (+{change:.2f}%)"
-    elif change <= -1.0:
-        return f"SELL ({change:.2f}%)"
+    day_change = ((current - day_open) / day_open) * 100
+    week_change = ((current - week_old) / week_old) * 100
+    print(f"📊 Daily: {day_change:.2f}%, Weekly: {week_change:.2f}%")
+    if day_change >= 1 and week_change >= 3:
+        return f"BUY (+{day_change:.2f}% today, +{week_change:.2f}% weekly)"
+    elif day_change <= -1 and week_change <= -3:
+        return f"SELL ({day_change:.2f}% today, {week_change:.2f}% weekly)"
     return None
 
-# Main scan
+# Main scanning logic
 def scan():
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
     positions = load_positions()
 
-    # STOCKS
+    # Stocks
     for symbol in SP500_TICKERS:
-        prices = get_stock_prices_finnhub(symbol)
-        if not prices:
-            continue
-        signal = analyze(prices)
-        current = prices[-1]
+        current, day_open, week_old = get_finnhub_prices(symbol)
+        signal = analyze_trends(current, day_open, week_old)
+        if not current: continue
         entry = positions.get(symbol, {}).get("entry")
 
         if signal and "BUY" in signal and symbol not in positions:
-            send(f"{signal} signal for {symbol} at {now}")
+            try:
+                news = news_tool.run(symbol)[:3]
+                summary = "\n".join([f"- {n['title']}" for n in news]) if news else "No headlines"
+            except:
+                summary = "News unavailable"
+            send(f"{signal} signal for {symbol} at {now}\n{summary}")
             positions[symbol] = {"type": "BUY", "entry": current, "time": now}
             save_positions(positions)
         elif symbol in positions:
             change = ((current - entry) / entry) * 100
             if change >= 5:
-                send(f"🎯 TAKE PROFIT: {symbol} is up {change:.2f}% since entry at {entry}")
+                send(f"🎯 TAKE PROFIT: {symbol} is up {change:.2f}% since buy at {entry}")
                 del positions[symbol]
-                save_positions(positions)
             elif change <= -3:
-                send(f"🛑 STOP LOSS: {symbol} is down {change:.2f}% since entry at {entry}")
+                send(f"🛑 STOP LOSS: {symbol} is down {change:.2f}% since buy at {entry}")
                 del positions[symbol]
-                save_positions(positions)
+            save_positions(positions)
 
-    # CRYPTO
+    # Crypto
     for symbol in BINANCE_CRYPTO:
-        prices = get_crypto_prices_binance(symbol)
-        if not prices:
-            continue
-        signal = analyze(prices)
-        current = prices[-1]
+        current, day_open, week_old = get_binance_prices(symbol)
+        signal = analyze_trends(current, day_open, week_old)
+        if not current: continue
         entry = positions.get(symbol, {}).get("entry")
 
         if signal and "BUY" in signal and symbol not in positions:
@@ -136,17 +158,16 @@ def scan():
         elif symbol in positions:
             change = ((current - entry) / entry) * 100
             if change >= 5:
-                send(f"🎯 TAKE PROFIT: {symbol} is up {change:.2f}% since entry at {entry}")
+                send(f"🎯 TAKE PROFIT: {symbol} is up {change:.2f}% since buy at {entry}")
                 del positions[symbol]
-                save_positions(positions)
             elif change <= -3:
-                send(f"🛑 STOP LOSS: {symbol} is down {change:.2f}% since entry at {entry}")
+                send(f"🛑 STOP LOSS: {symbol} is down {change:.2f}% since buy at {entry}")
                 del positions[symbol]
-                save_positions(positions)
+            save_positions(positions)
 
 # Main loop
 def main():
-    send("🤖 Trading bot started with trade tracking.")
+    send("🤖 Trend-based trading bot started!")
     while True:
         try:
             scan()
