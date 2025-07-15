@@ -1,4 +1,8 @@
 import os
+
+os.environ['USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TradingBot/1.0'
+print("✅ USER_AGENT is set to:", os.environ['USER_AGENT'])
+
 import time
 import datetime
 import statistics
@@ -13,7 +17,7 @@ from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-os.environ['USER_AGENT'] = 'TradingBot/1.0 (contact@example.com)'
+os.environ['USER_AGENT'] = 'TradingBot/1.0 (rk.ionescu@gmail.com'
 os.environ['USER_AGENT'] = 'TradingBot/1.0'
 
 # Initialize APIs
