@@ -1,8 +1,6 @@
 requests
-yfinance
-pycoingecko
 python-dotenv
-langchain
-langchain-community
 pandas
 lxml
+langchain
+langchain-community
