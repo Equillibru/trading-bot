@@ -1,16 +1,19 @@
-import os, time, datetime, statistics
+import os
+import time
+import datetime
+import statistics
 import requests
 import yfinance as yf
-from coingecko_api import CoinGeckoAPI
-from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
+from pycoingecko import CoinGeckoAPI
 from dotenv import load_dotenv
+from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
 
 # Load env
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("7668069380:AAGiZHHRPCzwPz604jmXm82cAjszVqVmFtA")
 TELEGRAM_CHAT_ID = os.getenv("6574517543")
 
-# Init APIs
+# Initialize APIs
 cg = CoinGeckoAPI()
 news_tool = YahooFinanceNewsTool()
 
