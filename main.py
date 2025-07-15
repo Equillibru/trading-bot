@@ -12,6 +12,22 @@ import pandas as pd
 from pycoingecko import CoinGeckoAPI
 from dotenv import load_dotenv
 from langchain_community.tools.yahoo_finance_news import YahooFinanceNewsTool
+import requests
+
+# TEMP test code for Telegram
+def test_telegram():
+    BOT_TOKEN = "7766044269:AAGMBoKYt8DZYjDvQIWkRyL8Neuqa_rCTIY"
+    CHAT_ID = "6574517543"
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": CHAT_ID,
+        "text": "✅ Test message from your trading bot!"
+    }
+    response = requests.post(url, data=payload)
+    print("Telegram test response:", response.json())
+
+# Call the test
+test_telegram()
 
 # Load env
 load_dotenv()
