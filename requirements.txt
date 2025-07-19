@@ -4,3 +4,4 @@ pandas
 lxml
 langchain
 langchain-community
+python-binance
