@@ -17,11 +17,27 @@ BINANCE_SECRET = os.getenv("BINANCE_SECRET_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
 client = Client(BINANCE_KEY, BINANCE_SECRET)
+TRADING_PAIRS = filter_valid_pairs(TRADING_PAIRS)
+
+def main():
+    init_db()
+    global TRADING_PAIRS
+    TRADING_PAIRS = filter_valid_pairs(TRADING_PAIRS)
+    send("🤖 Trading bot started with filtered Binance pairs")
+    ...
 
 # Config
 LIVE_MODE = False
 START_BUDGET = 100.0
-TRADING_PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"]
+all_pairs = [
+    "BNBUSDT", "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT",
+    "DOGEUSDT", "PEPEUSDT", "ADAUSDT", "SUIUSDT", "LINKUSDT",
+    "PROMUSDT", "WBTCUSDT", "PAXGUSDT", "AWEUSDT", "REQUSDT",
+    "BARUSDT", "ACMUSDT", "NEXOUSDT", "DEXEUSDT",
+    "VOXELUSDT", "FIDAUSDT", "SYNUSDT", "ARDRUSDT", "JASMYUSDT",
+    "ROSEUSDT", "FLOKIUSDT", "C98USDT", "BAKEUSDT", "MAGICUSDT"
+]
+TRADING_PAIRS = filter_valid_pairs(all_pairs)
 DB_PATH = "prices.db"
 POSITION_FILE = "positions.json"
 BALANCE_FILE = "balance.json"
