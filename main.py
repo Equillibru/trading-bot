@@ -8,7 +8,7 @@ import statistics
 from dotenv import load_dotenv
 from binance.client import Client
 
-# Load .env
+# Load environment variables
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -16,17 +16,19 @@ BINANCE_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET = os.getenv("BINANCE_SECRET_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
+# Binance client
 client = Client(BINANCE_KEY, BINANCE_SECRET)
 
 # Settings
 LIVE_MODE = False
-START_BUDGET = 100.0
+START_BALANCE = 100.12493175
 DB_PATH = "prices.db"
 POSITION_FILE = "positions.json"
 BALANCE_FILE = "balance.json"
+TRADE_LOG_FILE = "trade_log.json"
 VALID_PAIRS_FILE = "valid_pairs.json"
 
-# All symbols to validate (top 30 assets)
+# Asset list
 all_pairs = [
     "BNBUSDT", "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT",
     "DOGEUSDT", "PEPEUSDT", "ADAUSDT", "SUIUSDT", "LINKUSDT",
@@ -36,7 +38,7 @@ all_pairs = [
     "ROSEUSDT", "FLOKIUSDT", "C98USDT", "BAKEUSDT", "MAGICUSDT"
 ]
 
-# Telegram
+# Telegram notification
 def send(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -44,7 +46,7 @@ def send(msg):
     except:
         pass
 
-# JSON file handling
+# JSON I/O
 def load_json(path, default):
     return json.load(open(path)) if os.path.exists(path) else default
 
@@ -52,12 +54,14 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-# SQLite price DB
+# Database
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""CREATE TABLE IF NOT EXISTS prices (
-            symbol TEXT, timestamp TEXT, price REAL
-        )""")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS prices (
+                symbol TEXT, timestamp TEXT, price REAL
+            )
+        """)
 
 def save_price(symbol, price):
     now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -66,7 +70,7 @@ def save_price(symbol, price):
                      (symbol, now, price))
         conn.commit()
 
-# Binance market data
+# Market data
 def get_price(symbol):
     try:
         return float(client.get_symbol_ticker(symbol=symbol)['price'])
@@ -79,7 +83,7 @@ def get_klines(symbol, interval, limit):
     except:
         return []
 
-# NewsAPI
+# News
 def get_news_headlines(symbol, limit=5):
     try:
         query = symbol.replace("USDT", "")
@@ -96,16 +100,14 @@ def get_news_headlines(symbol, limit=5):
     except:
         return []
 
-# Cached valid trading pairs
+# Cached trading pairs
 def get_cached_valid_pairs(all_symbols):
     today = datetime.datetime.utcnow().date().isoformat()
     if os.path.exists(VALID_PAIRS_FILE):
         with open(VALID_PAIRS_FILE, "r") as f:
             data = json.load(f)
             if data.get("last_updated") == today:
-                print("✅ Using cached valid pairs.")
                 return data.get("pairs", [])
-    print("🔁 Validating symbols...")
     valid = []
     for symbol in all_symbols:
         try:
@@ -117,7 +119,7 @@ def get_cached_valid_pairs(all_symbols):
         json.dump({"last_updated": today, "pairs": valid}, f, indent=2)
     return valid
 
-# Simulated or real trade
+# Place trade
 def place_order(symbol, side, qty):
     if LIVE_MODE:
         return client.create_order(
@@ -129,7 +131,19 @@ def place_order(symbol, side, qty):
     else:
         return {"simulated": True, "symbol": symbol, "side": side, "qty": qty}
 
-# Strategy logic
+# Log a trade
+def log_trade(symbol, typ, qty, price):
+    log = load_json(TRADE_LOG_FILE, [])
+    timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    log.append({"symbol": symbol, "type": typ, "qty": qty, "price": price, "timestamp": timestamp})
+    save_json(TRADE_LOG_FILE, log)
+
+def trades_occurred_today():
+    log = load_json(TRADE_LOG_FILE, [])
+    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    return any(t["timestamp"].startswith(today) for t in log)
+
+# Analyze opportunity
 def analyze_opportunity(symbol):
     klines = get_klines(symbol, Client.KLINE_INTERVAL_1HOUR, 168)
     if len(klines) < 168:
@@ -142,12 +156,9 @@ def analyze_opportunity(symbol):
     three_days_ago = closes[-72]
     week_ago = closes[0]
 
-    # Trends
     one_hour = ((now - hour_ago) / hour_ago) * 100
     three_day = ((now - three_days_ago) / three_days_ago) * 100
     seven_day = ((now - week_ago) / week_ago) * 100
-
-    # Filters
     vol_recent = sum(volumes[-6:])
     vol_prev = sum(volumes[-12:-6])
     volatility = statistics.stdev(closes[-24:]) / now
@@ -155,30 +166,25 @@ def analyze_opportunity(symbol):
     if vol_recent <= vol_prev or volatility > 0.02:
         return None
 
-    # News filters
     headlines = get_news_headlines(symbol)
     bad_words = ["lawsuit", "ban", "hack", "crash", "regulation", "investigation"]
-    positive_words = ["surge", "rally", "gain", "partnership", "bullish", "upgrade", "adoption"]
+    good_words = ["surge", "rally", "gain", "partnership", "bullish", "upgrade", "adoption"]
 
     if any(any(bad in h.lower() for bad in bad_words) for h in headlines):
-        print(f"❌ Negative news for {symbol}")
+        return None
+    if not any(any(good in h.lower() for good in good_words) for h in headlines):
         return None
 
-    if not any(any(pos in h.lower() for pos in positive_words) for h in headlines):
-        print(f"⚠️ No positive news for {symbol}")
-        return None
-
-    # Final decision
     if one_hour >= 1 and three_day >= 2 and seven_day >= 3:
         return "BUY", headlines
     elif one_hour <= -1 and three_day <= -2 and seven_day <= -3:
         return "SHORT", headlines
     return None
 
-# Trading loop
+# Trade logic
 def trade():
     positions = load_json(POSITION_FILE, {})
-    balance = load_json(BALANCE_FILE, {"usdt": START_BUDGET})
+    balance = load_json(BALANCE_FILE, {"usdt": START_BALANCE})
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
     for symbol in TRADING_PAIRS:
@@ -187,16 +193,15 @@ def trade():
             continue
         save_price(symbol, price)
 
-        signal_data = analyze_opportunity(symbol)
-        if not signal_data:
+        result = analyze_opportunity(symbol)
+        if not result:
             continue
 
-        signal, headlines = signal_data
+        signal, headlines = result
         qty = round((balance["usdt"] * 0.5) / price, 6)
         if qty * price > balance["usdt"]:
             continue
 
-        # Entry
         if symbol not in positions:
             if signal == "BUY":
                 place_order(symbol, "BUY", qty)
@@ -208,21 +213,22 @@ def trade():
                 positions[symbol] = {"type": "SHORT", "qty": qty, "entry": price}
                 balance["usdt"] -= qty * price
                 tag = "🔻 SHORT"
+            log_trade(symbol, signal, qty, price)
+            news = "\n".join(f"📰 {h}" for h in headlines[:2]) if headlines else ""
+            send(f"{tag} {qty} {symbol} at ${price:.2f} — {now}\n{news}")
 
-            news_block = "\n".join(f"📰 {h}" for h in headlines[:2]) if headlines else ""
-            send(f"{tag} {qty} {symbol} at ${price:.2f} — {now}\n{news_block}")
-
-        # Exit
         elif symbol in positions:
-            entry = positions[symbol]["entry"]
-            qty = positions[symbol]["qty"]
-            pos_type = positions[symbol]["type"]
-            pnl = ((price - entry) / entry * 100) if pos_type == "LONG" else ((entry - price) / entry * 100)
+            pos = positions[symbol]
+            entry = pos["entry"]
+            qty = pos["qty"]
+            ptype = pos["type"]
+            pnl = ((price - entry) / entry * 100) if ptype == "LONG" else ((entry - price) / entry * 100)
             if pnl >= 1:
-                side = "SELL" if pos_type == "LONG" else "BUY"
-                place_order(symbol, side, qty)
+                action = "SELL" if ptype == "LONG" else "BUY"
+                place_order(symbol, action, qty)
                 balance["usdt"] += qty * price
-                send(f"✅ CLOSE {pos_type} {qty} {symbol} at ${price:.2f} — +{pnl:.2f}%")
+                log_trade(symbol, f"CLOSE-{ptype}", qty, price)
+                send(f"✅ CLOSE {ptype} {qty} {symbol} at ${price:.2f} — +{pnl:.2f}%")
                 del positions[symbol]
 
     save_json(POSITION_FILE, positions)
@@ -230,17 +236,17 @@ def trade():
 
     invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
     total = balance["usdt"] + invested
-    change = ((total - START_BUDGET) / START_BUDGET) * 100
-    print(f"[{now}] Net: ${total:.2f} ({change:.2f}%)")
-    if change >= 3:
-        send(f"🎉 Portfolio up {change:.2f}%")
+    change = ((total - START_BALANCE) / START_BALANCE) * 100
+
+    if trades_occurred_today() and change >= 3:
+        send(f"🎉 Portfolio up {change:.2f}% today!")
 
 # Main loop
 def main():
     init_db()
     global TRADING_PAIRS
     TRADING_PAIRS = get_cached_valid_pairs(all_pairs)
-    send("🤖 Bot started with smart news + trend filters.")
+    send("🤖 Trading bot with trade logging started.")
     while True:
         try:
             trade()
