@@ -50,8 +50,10 @@ def load_json(path, default):
     try:
         with open(path) as f:
             return json.load(f)
-    except (json.JSONDecodeError, ValueError):
-        print(f"⚠️ Corrupted JSON in {path}, resetting to default.")
+    except Exception as e:
+        print(f"⚠️ Failed to load {path}: {e} — resetting.")
+        with open(path, "w") as f:
+            json.dump(default, f, indent=2)
         return default
 
 def save_json(path, data):
