@@ -138,9 +138,12 @@ def trades_occurred_today():
     today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     return any(t["timestamp"].startswith(today) for t in log)
 
+# ... [imports and setup code remain unchanged]
+
 def analyze_opportunity(symbol):
     klines = get_klines(symbol, Client.KLINE_INTERVAL_1HOUR, 168)
     if len(klines) < 168:
+        print(f"⛔ Not enough data for {symbol}")
         return None
 
     closes = [float(k[4]) for k in klines]
@@ -157,7 +160,13 @@ def analyze_opportunity(symbol):
     vol_prev = sum(volumes[-12:-6])
     volatility = statistics.stdev(closes[-24:]) / now
 
-    if vol_recent <= vol_prev or volatility > 0.02:
+    print(f"🧠 Analyzing {symbol} | 1h: {one_hour:.2f}% | 3d: {three_day:.2f}% | 7d: {seven_day:.2f}% | Vol: {volatility:.4f}")
+
+    if vol_recent <= vol_prev:
+        print(f"📉 Skipped {symbol} — declining volume")
+        return None
+    if volatility > 0.02:
+        print(f"⚠️ Skipped {symbol} — high volatility ({volatility:.4f})")
         return None
 
     headlines = get_news_headlines(symbol)
@@ -165,10 +174,13 @@ def analyze_opportunity(symbol):
     good_words = ["surge", "rally", "gain", "partnership", "bullish", "upgrade", "adoption"]
 
     if any(any(bad in h.lower() for bad in bad_words) for h in headlines):
+        print(f"🚫 Skipped {symbol} — negative news")
         return None
     if not any(any(good in h.lower() for good in good_words) for h in headlines):
+        print(f"🟡 Skipped {symbol} — no strong positive news")
         return None
 
+    print(f"✅ Signal found for {symbol} — {('BUY' if one_hour >= 1 else 'SHORT')}")
     if one_hour >= 1 and three_day >= 2 and seven_day >= 3:
         return "BUY", headlines
     elif one_hour <= -1 and three_day <= -2 and seven_day <= -3:
@@ -183,7 +195,9 @@ def trade():
     for symbol in TRADING_PAIRS:
         price = get_price(symbol)
         if not price:
+            print(f"⚠️ Skipping {symbol} — price unavailable")
             continue
+        print(f"🔍 Checking {symbol} at ${price:.2f}")
         save_price(symbol, price)
 
         result = analyze_opportunity(symbol)
@@ -193,6 +207,7 @@ def trade():
         signal, headlines = result
         qty = round((balance["usdt"] * 0.5) / price, 6)
         if qty * price > balance["usdt"]:
+            print(f"💸 Not enough balance to trade {symbol}")
             continue
 
         if symbol not in positions:
@@ -208,6 +223,7 @@ def trade():
                 tag = "🔻 SHORT"
             log_trade(symbol, signal, qty, price)
             news = "\n".join(f"📰 {h}" for h in headlines[:2]) if headlines else ""
+            print(f"{tag} {qty} {symbol} at ${price:.2f}")
             send(f"{tag} {qty} {symbol} at ${price:.2f} — {now}\n{news}")
 
         elif symbol in positions:
@@ -216,6 +232,7 @@ def trade():
             qty = pos["qty"]
             ptype = pos["type"]
             pnl = ((price - entry) / entry * 100) if ptype == "LONG" else ((entry - price) / entry * 100)
+            print(f"📈 Open {ptype} {symbol} | Entry: {entry:.2f} → Now: {price:.2f} | PnL: {pnl:.2f}%")
             if pnl >= 1:
                 action = "SELL" if ptype == "LONG" else "BUY"
                 place_order(symbol, action, qty)
@@ -230,6 +247,7 @@ def trade():
     invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
     total = balance["usdt"] + invested
     change = ((total - START_BALANCE) / START_BALANCE) * 100
+    print(f"[{now}] Balance: ${total:.2f} | Change: {change:.2f}%")
 
     if change >= 3:
         send(f"🎯 Daily goal reached: +{change:.2f}% — trades paused.")
@@ -237,6 +255,7 @@ def trade():
 
     if trades_occurred_today() and change >= 1:
         send(f"📈 Portfolio up {change:.2f}% today!")
+
 
 def main():
     try:
