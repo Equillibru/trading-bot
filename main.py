@@ -67,10 +67,14 @@ def init_db():
 
 def save_price(symbol, price):
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("INSERT INTO prices (symbol, timestamp, price) VALUES (?, ?, ?)",
-                     (symbol, now, price))
-        conn.commit()
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("INSERT INTO prices (symbol, timestamp, price) VALUES (?, ?, ?)",
+                         (symbol, now, price))
+            conn.commit()
+        print(f"💾 Saved price for {symbol} at ${price:.2f} — {now}")
+    except Exception as e:
+        print(f"❌ Failed to save price for {symbol}: {e}")
 
 def get_price(symbol):
     try:
