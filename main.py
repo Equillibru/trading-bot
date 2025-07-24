@@ -1,5 +1,3 @@
-print("✅ Bot has started")
-
 import os
 import time
 import datetime
@@ -10,7 +8,7 @@ import statistics
 from dotenv import load_dotenv
 from binance.client import Client
 
-# Load .env vars
+# Load environment variables
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -18,8 +16,8 @@ BINANCE_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET = os.getenv("BINANCE_SECRET_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
-# Global config
 client = Client(BINANCE_KEY, BINANCE_SECRET)
+
 LIVE_MODE = False
 START_BALANCE = 100.12493175
 DB_PATH = "prices.db"
@@ -27,9 +25,8 @@ POSITION_FILE = "positions.json"
 BALANCE_FILE = "balance.json"
 TRADE_LOG_FILE = "trade_log.json"
 VALID_PAIRS_FILE = "valid_pairs.json"
-TRADING_PAIRS = []  # Declared here to prevent NameError
+TRADING_PAIRS = []
 
-# Top symbols
 all_pairs = [
     "BNBUSDT", "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT",
     "DOGEUSDT", "PEPEUSDT", "ADAUSDT", "SUIUSDT", "LINKUSDT",
@@ -51,7 +48,7 @@ def load_json(path, default):
         with open(path) as f:
             return json.load(f)
     except Exception as e:
-        print(f"⚠️ Failed to load {path}: {e} — resetting.")
+        print(f"⚠️ Failed to load {path}: {e} — resetting to default.")
         with open(path, "w") as f:
             json.dump(default, f, indent=2)
         return default
@@ -69,7 +66,7 @@ def init_db():
         """)
 
 def save_price(symbol, price):
-    now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("INSERT INTO prices (symbol, timestamp, price) VALUES (?, ?, ?)",
                      (symbol, now, price))
@@ -104,12 +101,11 @@ def get_news_headlines(symbol, limit=5):
         return []
 
 def get_cached_valid_pairs(all_symbols):
-    today = datetime.datetime.utcnow().date().isoformat()
+    today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     if os.path.exists(VALID_PAIRS_FILE):
-        with open(VALID_PAIRS_FILE, "r") as f:
-            data = json.load(f)
-            if data.get("last_updated") == today:
-                return data.get("pairs", [])
+        data = load_json(VALID_PAIRS_FILE, {})
+        if data.get("last_updated") == today:
+            return data.get("pairs", [])
     valid = []
     for symbol in all_symbols:
         try:
@@ -117,8 +113,7 @@ def get_cached_valid_pairs(all_symbols):
                 valid.append(symbol)
         except:
             pass
-    with open(VALID_PAIRS_FILE, "w") as f:
-        json.dump({"last_updated": today, "pairs": valid}, f, indent=2)
+    save_json(VALID_PAIRS_FILE, {"last_updated": today, "pairs": valid})
     return valid
 
 def place_order(symbol, side, qty):
@@ -134,13 +129,13 @@ def place_order(symbol, side, qty):
 
 def log_trade(symbol, typ, qty, price):
     log = load_json(TRADE_LOG_FILE, [])
-    timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     log.append({"symbol": symbol, "type": typ, "qty": qty, "price": price, "timestamp": timestamp})
     save_json(TRADE_LOG_FILE, log)
 
 def trades_occurred_today():
     log = load_json(TRADE_LOG_FILE, [])
-    today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     return any(t["timestamp"].startswith(today) for t in log)
 
 def analyze_opportunity(symbol):
@@ -183,7 +178,7 @@ def analyze_opportunity(symbol):
 def trade():
     positions = load_json(POSITION_FILE, {})
     balance = load_json(BALANCE_FILE, {"usdt": START_BALANCE})
-    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+    now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M')
 
     for symbol in TRADING_PAIRS:
         price = get_price(symbol)
@@ -249,8 +244,8 @@ def main():
         global TRADING_PAIRS
         TRADING_PAIRS = get_cached_valid_pairs(all_pairs)
 
-        send("🤖 Trading bot started on Render (24/7 live mode)")
-        print("✅ Bot is running continuously...")
+        send("🤖 Trading bot started on Render (safe mode)")
+        print("✅ Bot is running...")
 
         while True:
             try:
@@ -266,5 +261,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
