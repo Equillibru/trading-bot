@@ -252,16 +252,15 @@ def main():
     init_db()
     global TRADING_PAIRS
     TRADING_PAIRS = get_cached_valid_pairs(all_pairs)
-    send("🤖 Bot started for 10-minute live test")
 
-    start_time = time.time()
-    duration = 10 * 60  # 10 minutes in seconds
+    send("🤖 Trading bot started on Render (24/7 live mode)")
+    print("✅ Bot is running continuously...")
 
-    while time.time() - start_time < duration:
+    while True:
         try:
             trade()
         except Exception as e:
-            send(f"⚠️ Error: {e}")
-        time.sleep(300)  # 5-minute intervals (2 cycles in 10 minutes)
+            print(f"ERROR: {e}")
+            send(f"⚠️ Bot crashed: {e}")
+        time.sleep(300)  # wait 5 minutes before next scan
 
-    send("⏹️ Bot test completed after 10 minutes.")
