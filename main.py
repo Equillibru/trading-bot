@@ -239,8 +239,8 @@ def trade():
     change = ((total - START_BALANCE) / START_BALANCE) * 100
     
     if change >= 3:
-    send(f"🎉 Daily goal reached: +{change:.2f}% — trading paused.")
-    return  # ⛔ stop trading for the rest of the day
+        send(f"🎉 Daily goal reached: +{change:.2f}% — trading paused.")
+        return  # ⛔ stop trading for the rest of the day
 
     if trades_occurred_today() and change >= 3:
         send(f"🎉 Portfolio up {change:.2f}% today!")
