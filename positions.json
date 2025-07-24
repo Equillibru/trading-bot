@@ -1,12 +1,1 @@
-{
-  "BTCUSDT": {
-    "type": "LONG",
-    "qty": 0.00123,
-    "entry": 42150.50
-  },
-  "ETHUSDT": {
-    "type": "SHORT",
-    "qty": 0.0054,
-    "entry": 3240.75
-  }
-}
+
