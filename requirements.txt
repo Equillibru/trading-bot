@@ -1,6 +1,5 @@
 requests
 python-dotenv
-pandas
 lxml
 langchain
 langchain-community
