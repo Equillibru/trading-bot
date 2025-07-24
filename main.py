@@ -153,6 +153,18 @@ def trade():
     total = balance["usdt"] + invested
     print(f"[{now}] Net balance: ${total:.2f}")
 
+def place_order(symbol, side, qty):
+    if LIVE_MODE:
+        return client.create_order(
+            symbol=symbol,
+            side=side.upper(),
+            type="MARKET",
+            quantity=qty
+        )
+    else:
+        print(f"[SIMULATED] {side} {qty} {symbol}")
+        return {"simulated": True, "symbol": symbol, "side": side, "qty": qty}
+
 def main():
     try:
         init_db()
