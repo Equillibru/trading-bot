@@ -10,7 +10,7 @@ import statistics
 from dotenv import load_dotenv
 from binance.client import Client
 
-# Load environment variables
+# Load .env vars
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -18,10 +18,8 @@ BINANCE_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_SECRET = os.getenv("BINANCE_SECRET_KEY")
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
-# Binance client
+# Global config
 client = Client(BINANCE_KEY, BINANCE_SECRET)
-
-# Settings
 LIVE_MODE = False
 START_BALANCE = 100.12493175
 DB_PATH = "prices.db"
@@ -29,8 +27,9 @@ POSITION_FILE = "positions.json"
 BALANCE_FILE = "balance.json"
 TRADE_LOG_FILE = "trade_log.json"
 VALID_PAIRS_FILE = "valid_pairs.json"
+TRADING_PAIRS = []  # Declared here to prevent NameError
 
-# Asset list
+# Top symbols
 all_pairs = [
     "BNBUSDT", "BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT",
     "DOGEUSDT", "PEPEUSDT", "ADAUSDT", "SUIUSDT", "LINKUSDT",
@@ -40,7 +39,6 @@ all_pairs = [
     "ROSEUSDT", "FLOKIUSDT", "C98USDT", "BAKEUSDT", "MAGICUSDT"
 ]
 
-# Telegram notification
 def send(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -48,7 +46,6 @@ def send(msg):
     except:
         pass
 
-# JSON I/O
 def load_json(path, default):
     return json.load(open(path)) if os.path.exists(path) else default
 
@@ -56,7 +53,6 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-# Database
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
@@ -72,7 +68,6 @@ def save_price(symbol, price):
                      (symbol, now, price))
         conn.commit()
 
-# Market data
 def get_price(symbol):
     try:
         return float(client.get_symbol_ticker(symbol=symbol)['price'])
@@ -85,7 +80,6 @@ def get_klines(symbol, interval, limit):
     except:
         return []
 
-# News
 def get_news_headlines(symbol, limit=5):
     try:
         query = symbol.replace("USDT", "")
@@ -102,7 +96,6 @@ def get_news_headlines(symbol, limit=5):
     except:
         return []
 
-# Cached trading pairs
 def get_cached_valid_pairs(all_symbols):
     today = datetime.datetime.utcnow().date().isoformat()
     if os.path.exists(VALID_PAIRS_FILE):
@@ -121,7 +114,6 @@ def get_cached_valid_pairs(all_symbols):
         json.dump({"last_updated": today, "pairs": valid}, f, indent=2)
     return valid
 
-# Place trade
 def place_order(symbol, side, qty):
     if LIVE_MODE:
         return client.create_order(
@@ -133,7 +125,6 @@ def place_order(symbol, side, qty):
     else:
         return {"simulated": True, "symbol": symbol, "side": side, "qty": qty}
 
-# Log a trade
 def log_trade(symbol, typ, qty, price):
     log = load_json(TRADE_LOG_FILE, [])
     timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -145,7 +136,6 @@ def trades_occurred_today():
     today = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     return any(t["timestamp"].startswith(today) for t in log)
 
-# Analyze opportunity
 def analyze_opportunity(symbol):
     klines = get_klines(symbol, Client.KLINE_INTERVAL_1HOUR, 168)
     if len(klines) < 168:
@@ -183,7 +173,6 @@ def analyze_opportunity(symbol):
         return "SHORT", headlines
     return None
 
-# Trade logic
 def trade():
     positions = load_json(POSITION_FILE, {})
     balance = load_json(BALANCE_FILE, {"usdt": START_BALANCE})
@@ -239,28 +228,36 @@ def trade():
     invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
     total = balance["usdt"] + invested
     change = ((total - START_BALANCE) / START_BALANCE) * 100
-    
+
     if change >= 3:
-        send(f"🎉 Daily goal reached: +{change:.2f}% — trading paused.")
-        return  # ⛔ stop trading for the rest of the day
+        send(f"🎯 Daily goal reached: +{change:.2f}% — trades paused.")
+        return
 
-    if trades_occurred_today() and change >= 3:
-        send(f"🎉 Portfolio up {change:.2f}% today!")
+    if trades_occurred_today() and change >= 1:
+        send(f"📈 Portfolio up {change:.2f}% today!")
 
-# Main loop
 def main():
-    init_db()
-    global TRADING_PAIRS
-    TRADING_PAIRS = get_cached_valid_pairs(all_pairs)
+    try:
+        init_db()
+        global TRADING_PAIRS
+        TRADING_PAIRS = get_cached_valid_pairs(all_pairs)
 
-    send("🤖 Trading bot started on Render (24/7 live mode)")
-    print("✅ Bot is running continuously...")
+        send("🤖 Trading bot started on Render (24/7 live mode)")
+        print("✅ Bot is running continuously...")
 
-    while True:
-        try:
-            trade()
-        except Exception as e:
-            print(f"ERROR: {e}")
-            send(f"⚠️ Bot crashed: {e}")
-        time.sleep(300)  # wait 5 minutes before next scan
+        while True:
+            try:
+                trade()
+            except Exception as e:
+                print(f"ERROR in trade(): {e}")
+                send(f"⚠️ Error in trade(): {e}")
+            time.sleep(300)
+
+    except Exception as e:
+        print(f"❌ Fatal error in main(): {e}")
+        send(f"🚨 Startup failed: {e}")
+
+if __name__ == "__main__":
+    main()
+
 
