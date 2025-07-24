@@ -1,3 +1,5 @@
+print("✅ Bot has started")
+
 import os
 import time
 import datetime
