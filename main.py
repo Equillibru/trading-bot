@@ -47,7 +47,12 @@ def send(msg):
         pass
 
 def load_json(path, default):
-    return json.load(open(path)) if os.path.exists(path) else default
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, ValueError):
+        print(f"⚠️ Corrupted JSON in {path}, resetting to default.")
+        return default
 
 def save_json(path, data):
     with open(path, "w") as f:
