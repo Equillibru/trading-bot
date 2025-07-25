@@ -4,3 +4,4 @@ lxml
 langchain
 langchain-community
 python-binance
+textblob
