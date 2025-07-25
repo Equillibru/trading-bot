@@ -166,6 +166,9 @@ def trade():
         if not any(any(good in h.lower() for good in good_words) for h in headlines):
             print(f"🟡 {symbol} skipped — no strong positive news")
             continue
+        if not headlines:
+            print(f"⚠️ No news headlines for {symbol}")
+            continue
 
         qty = round((balance["usdt"] * 0.5) / price, 6)
 
@@ -219,6 +222,7 @@ def main():
         init_db()
         log_info("🤖 Trading bot started")
         send("🤖 Trading bot running with sentiment analysis")
+        print(f"Current balance: ${balance['usdt']:.2f}") #Verify trade balance
 
         while True:
             try:
