@@ -145,33 +145,33 @@ def log_trade(symbol, typ, qty, price):
 
 # === TRADING LOGIC ===
 def trade():
-    positions = load_json(config["POSITION_FILE"], {})
-    balance = load_json(config["BALANCE_FILE"], {"usdt": config["START_BALANCE"]})
+    positions = load_json(POSITION_FILE, {})
+    balance = load_json(BALANCE_FILE, {"usdt": START_BALANCE})
+    starting_balance = balance["usdt"]  # Store the starting balance
     now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M')
 
-    for symbol in config["TRADING_PAIRS"]:
+    for symbol in TRADING_PAIRS:
         price = get_price(symbol)
         if not price:
-            log_info(f"⚠️ No price for {symbol}")
+            print(f"⚠️ No price for {symbol}")
             continue
 
         save_price(symbol, price)
-        log_info(f"🔍 {symbol} @ ${price:.2f}")
+        print(f"🔍 {symbol} @ ${price:.2f}")
 
         headlines = get_news_headlines(symbol)
-        sentiment_score = analyze_sentiment(headlines)
-        if sentiment_score < 0:
-            log_info(f"🚫 {symbol} blocked by negative sentiment")
+        if any(any(bad in h.lower() for bad in bad_words) for h in headlines):
+            print(f"🚫 {symbol} blocked by negative news")
             continue
-        if sentiment_score == 0:
-            log_info(f"🟡 {symbol} skipped — no strong sentiment")
+        if not any(any(good in h.lower() for good in good_words) for h in headlines):
+            print(f"🟡 {symbol} skipped — no strong positive news")
             continue
 
         qty = round((balance["usdt"] * 0.5) / price, 6)
 
         if symbol not in positions:
             if qty * price > balance["usdt"]:
-                log_info(f"❌ Insufficient balance for {symbol}")
+                print(f"❌ Insufficient balance for {symbol}")
                 continue
 
             positions[symbol] = {"type": "LONG", "qty": qty, "entry": price}
@@ -180,7 +180,7 @@ def trade():
 
             total_cost = qty * price
             send(f"🟢 BUY {qty} {symbol} at ${price:.2f} — Total: ${total_cost:.2f} USDT — {now}")
-            log_info(f"✅ BUY {qty} {symbol} at ${price:.2f} (${total_cost:.2f})")
+            print(f"✅ BUY {qty} {symbol} at ${price:.2f} (${total_cost:.2f})")
 
         else:
             pos = positions[symbol]
@@ -189,9 +189,9 @@ def trade():
             pnl = ((price - entry) / entry) * 100
             profit = (price - entry) * qty
 
-            log_info(f"📈 {symbol} Entry ${entry:.2f} → Now ${price:.2f} | PnL: {pnl:.2f}%")
+            print(f"📈 {symbol} Entry ${entry:.2f} → Now ${price:.2f} | PnL: {pnl:.2f}%")
 
-            if pnl >= config["PROFIT_THRESHOLD"]:
+            if pnl >= 0.5:
                 balance["usdt"] += qty * price
                 del positions[symbol]
                 log_trade(symbol, "CLOSE-LONG", qty, price)
@@ -199,14 +199,19 @@ def trade():
                 send(
                     f"✅ CLOSE {symbol} at ${price:.2f} — Profit: ${profit:.2f} USDT (+{pnl:.2f}%) — {now}"
                 )
-                log_info(f"✅ CLOSE {symbol} at ${price:.2f} | Profit: ${profit:.2f} USDT (+{pnl:.2f}%)")
+                print(f"✅ CLOSE {symbol} at ${price:.2f} | Profit: ${profit:.2f} USDT (+{pnl:.2f}%)")
 
-    save_json(config["POSITION_FILE"], positions)
-    save_json(config["BALANCE_FILE"], balance)
+    save_json(POSITION_FILE, positions)
+    save_json(BALANCE_FILE, balance)
 
     invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
-    total = balance["usdt"] + invested
-    log_info(f"[{now}] Net balance: ${total:.2f}")
+    ending_balance = balance["usdt"] + invested  # Calculate the ending balance
+    profit_percentage = ((ending_balance - starting_balance) / starting_balance) * 100
+
+    # Send Telegram message with starting and ending balance
+    send(f"💰 Starting Balance: ${starting_balance:.2f}\n💰 Ending Balance: ${ending_balance:.2f}\n📈 Profit/Loss: {profit_percentage:.2f}%")
+
+    print(f"[{now}] Net balance: ${ending_balance:.2f}")
 
 # === MAIN FUNCTION ===
 def main():
