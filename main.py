@@ -103,48 +103,58 @@ def log_trade(symbol, typ, qty, price):
 def trade():
     positions = load_json(POSITION_FILE, {})
     balance = load_json(BALANCE_FILE, {"usdt": START_BALANCE})
-    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+    now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M')
 
     for symbol in TRADING_PAIRS:
         price = get_price(symbol)
         if not price:
-            print(f"⚠️ {symbol} price unavailable")
+            print(f"⚠️ No price for {symbol}")
             continue
 
         save_price(symbol, price)
-        print(f"🔍 {symbol} at ${price:.2f}")
+        print(f"🔍 {symbol} @ ${price:.2f}")
+
+        headlines = get_news_headlines(symbol)
+        if any(any(bad in h.lower() for bad in bad_words) for h in headlines):
+            print(f"🚫 {symbol} blocked by negative news")
+            continue
+        if not any(any(good in h.lower() for good in good_words) for h in headlines):
+            print(f"🟡 {symbol} skipped — no strong positive news")
+            continue
 
         qty = round((balance["usdt"] * 0.5) / price, 6)
 
-        # Forced test trade (only once)
         if symbol not in positions:
             if qty * price > balance["usdt"]:
-                print(f"💸 Not enough balance for {symbol}")
+                print(f"❌ Insufficient balance for {symbol}")
                 continue
 
-            # FORCED BUY
-            place_order(symbol, "BUY", qty)
             positions[symbol] = {"type": "LONG", "qty": qty, "entry": price}
             balance["usdt"] -= qty * price
-            log_trade(symbol, "FORCED-BUY", qty, price)
-            send(f"🧪 FORCED BUY {qty} {symbol} at ${price:.2f} — {now}")
-            print(f"✅ FORCED BUY {qty} {symbol} at ${price:.2f}")
-            break  # Only force one trade
+            log_trade(symbol, "BUY", qty, price)
 
-        elif symbol in positions:
+            total_cost = qty * price
+            send(f"🟢 BUY {qty} {symbol} at ${price:.2f} — Total: ${total_cost:.2f} USDT — {now}")
+            print(f"✅ BUY {qty} {symbol} at ${price:.2f} (${total_cost:.2f})")
+
+        else:
             pos = positions[symbol]
             entry = pos["entry"]
             qty = pos["qty"]
             pnl = ((price - entry) / entry) * 100
+            profit = (price - entry) * qty
 
-            print(f"📈 {symbol} entry ${entry:.2f} → now ${price:.2f} | PnL: {pnl:.2f}%")
+            print(f"📈 {symbol} Entry ${entry:.2f} → Now ${price:.2f} | PnL: {pnl:.2f}%")
 
-            if pnl >= 0.1:
-                place_order(symbol, "SELL", qty)
+            if pnl >= 0.5:
                 balance["usdt"] += qty * price
-                log_trade(symbol, "CLOSE-LONG", qty, price)
-                send(f"✅ CLOSE {symbol} at ${price:.2f} (+{pnl:.2f}%)")
                 del positions[symbol]
+                log_trade(symbol, "CLOSE-LONG", qty, price)
+
+                send(
+                    f"✅ CLOSE {symbol} at ${price:.2f} — Profit: ${profit:.2f} USDT (+{pnl:.2f}%) — {now}"
+                )
+                print(f"✅ CLOSE {symbol} at ${price:.2f} | Profit: ${profit:.2f} USDT (+{pnl:.2f}%)")
 
     save_json(POSITION_FILE, positions)
     save_json(BALANCE_FILE, balance)
@@ -152,6 +162,7 @@ def trade():
     invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
     total = balance["usdt"] + invested
     print(f"[{now}] Net balance: ${total:.2f}")
+
 
 def place_order(symbol, side, qty):
     if LIVE_MODE:
