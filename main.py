@@ -145,9 +145,8 @@ def log_trade(symbol, typ, qty, price):
 
 # === TRADING LOGIC ===
 def trade():
+    global balance  # Use the global balance variable
     positions = load_json(POSITION_FILE, {})
-    balance = load_json(BALANCE_FILE, {"usdt": START_BALANCE})
-    starting_balance = balance["usdt"]  # Store the starting balance
     now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M')
 
     for symbol in TRADING_PAIRS:
@@ -165,9 +164,6 @@ def trade():
             continue
         if not any(any(good in h.lower() for good in good_words) for h in headlines):
             print(f"🟡 {symbol} skipped — no strong positive news")
-            continue
-        if not headlines:
-            print(f"⚠️ No news headlines for {symbol}")
             continue
 
         qty = round((balance["usdt"] * 0.5) / price, 6)
@@ -208,8 +204,8 @@ def trade():
     save_json(BALANCE_FILE, balance)
 
     invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
-    ending_balance = balance["usdt"] + invested  # Calculate the ending balance
-    profit_percentage = ((ending_balance - starting_balance) / starting_balance) * 100
+    total = balance["usdt"] + invested
+    print(f"[{now}] Net balance: ${total:.2f}")
 
     # Send Telegram message with starting and ending balance
     send(f"💰 Starting Balance: ${starting_balance:.2f}\n💰 Ending Balance: ${ending_balance:.2f}\n📈 Profit/Loss: {profit_percentage:.2f}%")
@@ -218,22 +214,20 @@ def trade():
 
 # === MAIN FUNCTION ===
 def main():
+    global balance  # Use the global balance variable
     try:
         init_db()
-        log_info("🤖 Trading bot started")
-        send("🤖 Trading bot running with sentiment analysis")
-        print(f"Current balance: ${balance['usdt']:.2f}") #Verify trade balance
+        balance = load_json(BALANCE_FILE, {"usdt": START_BALANCE})  # Initialize balance
+        print("🤖 Trading bot started")
+        send("🤖 Trading bot running with news filtering")
 
         while True:
             try:
                 trade()
             except Exception as e:
-                log_error(f"ERROR in trade(): {e}")
+                print(f"ERROR in trade(): {e}")
                 send(f"⚠️ Error in trade(): {e}")
             time.sleep(300)
     except Exception as e:
-        log_error(f"❌ Startup failed: {e}")
+        print(f"❌ Startup failed: {e}")
         send(f"🚨 Bot failed to start: {e}")
-
-if __name__ == "__main__":
-    main()
