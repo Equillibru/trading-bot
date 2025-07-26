@@ -123,7 +123,7 @@ def trade():
             # Comment 
             #continue
 
-        qty = round((balance["usdt"] * 0.5) / price, 6)
+        qty = round((balance["usdt"] * 0.25) / price, 6)
 
         if symbol not in positions:
             if qty * price > balance["usdt"]:
@@ -156,6 +156,10 @@ def trade():
                     f"✅ CLOSE {symbol} at ${price:.2f} — Profit: ${profit:.2f} USDT (+{pnl:.2f}%) — {now}"
                 )
                 print(f"✅ CLOSE {symbol} at ${price:.2f} | Profit: ${profit:.2f} USDT (+{pnl:.2f}%)")
+                invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
+                total = balance["usdt"] + invested
+                send(f"📊 Updated Balance: ${total:.2f} USDT — {now}")
+
 
     save_json(POSITION_FILE, positions)
     save_json(BALANCE_FILE, balance)
@@ -163,6 +167,8 @@ def trade():
     invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
     total = balance["usdt"] + invested
     print(f"[{now}] Net balance: ${total:.2f}")
+    send(f"📊 Updated Balance: ${total:.2f} USDT — {now}")
+
 
 
 def place_order(symbol, side, qty):
