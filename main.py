@@ -86,6 +86,12 @@ def trade():
         price = get_price(symbol)
         if not price:
             continue
+        codex/analyze-code
+        if not any(any(good in h.lower() for good in good_words) for h in headlines):
+            print(f"🟡 {symbol} skipped — no strong positive news")
+            continue
+
+        main
 
         qty = round((balance["usdt"] * CONFIG["trade_fraction"]) / price, 6)
 
