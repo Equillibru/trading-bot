@@ -19,6 +19,7 @@ client = Client(BINANCE_KEY, BINANCE_SECRET)
 
 LIVE_MODE = False
 START_BALANCE = 100.12493175
+MAX_INVESTED_PER_DAY = START_BALANCE * 0.2
 DB_PATH = "prices.db"
 POSITION_FILE = "positions.json"
 BALANCE_FILE = "balance.json"
@@ -120,10 +121,20 @@ def trade():
             continue
         if not any(any(good in h.lower() for good in good_words) for h in headlines):
             print(f"🟡 {symbol} skipped — no strong positive news")
-            # Comment 
-            #continue
+           
 
-        qty = round((balance["usdt"] * 0.25) / price, 6)
+# Total currently invested across all open positions
+        current_invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
+        remaining_allowance = MAX_INVESTED_PER_DAY - current_invested
+
+        if remaining_allowance <= 0:
+            print(f"🔒 Max daily investment reached. Skipping {symbol}")
+            continue
+
+# Determine how much of remaining allowance to use
+        trade_usdt = min(remaining_allowance, balance["usdt"] * 0.25)
+        qty = round(trade_usdt / price, 6)
+
 
         if symbol not in positions:
             if qty * price > balance["usdt"]:
