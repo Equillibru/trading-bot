@@ -120,7 +120,8 @@ def trade():
             continue
         if not any(any(good in h.lower() for good in good_words) for h in headlines):
             print(f"🟡 {symbol} skipped — no strong positive news")
-            continue
+            # Comment 
+            #continue
 
         qty = round((balance["usdt"] * 0.5) / price, 6)
 
