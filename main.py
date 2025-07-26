@@ -4,10 +4,11 @@ import datetime
 import json
 import sqlite3
 import requests
+import math
 from dotenv import load_dotenv
 from binance.client import Client
 
-# Load environment variables
+# === Load environment ===
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -17,17 +18,13 @@ NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 
 client = Client(BINANCE_KEY, BINANCE_SECRET)
 
-LIVE_MODE = False
-START_BALANCE = 100.12493175
-MAX_INVESTED_PER_DAY = START_BALANCE * 0.2
-DB_PATH = "prices.db"
+LIVE_MODE = True
+START_BALANCE = 100.32  # Example starting balance
+DAILY_MAX_INVEST = START_BALANCE * 0.20
 POSITION_FILE = "positions.json"
 BALANCE_FILE = "balance.json"
 TRADE_LOG_FILE = "trade_log.json"
-TRADING_PAIRS = [
-    "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "SOLUSDT",
-    "ADAUSDT", "DOGEUSDT", "LINKUSDT", "MATICUSDT", "DOTUSDT"
-]
+TRADING_PAIRS = ["BTCUSDT", "ETHUSDT"]
 
 bad_words = ["lawsuit", "ban", "hack", "crash", "regulation", "investigation"]
 good_words = ["surge", "rally", "gain", "partnership", "bullish", "upgrade", "adoption"]
@@ -43,8 +40,7 @@ def load_json(path, default):
     try:
         with open(path) as f:
             return json.load(f)
-    except Exception as e:
-        print(f"⚠️ Failed to load {path}: {e} — resetting.")
+    except:
         with open(path, "w") as f:
             json.dump(default, f, indent=2)
         return default
@@ -53,30 +49,23 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-def init_db():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS prices (
-                symbol TEXT, timestamp TEXT, price REAL
-            )
-        """)
-
-def save_price(symbol, price):
-    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("INSERT INTO prices (symbol, timestamp, price) VALUES (?, ?, ?)",
-                         (symbol, now, price))
-            conn.commit()
-        print(f"💾 Saved {symbol} at ${price:.2f}")
-    except Exception as e:
-        print(f"❌ DB save error for {symbol}: {e}")
-
 def get_price(symbol):
     try:
         return float(client.get_symbol_ticker(symbol=symbol)['price'])
     except:
         return None
+
+def place_order(symbol, side, qty):
+    if LIVE_MODE:
+        return client.create_order(
+            symbol=symbol,
+            side=side.upper(),
+            type="MARKET",
+            quantity=qty
+        )
+    else:
+        print(f"[SIMULATED] {side} {qty} {symbol}")
+        return {"simulated": True}
 
 def get_news_headlines(symbol, limit=5):
     try:
@@ -91,8 +80,7 @@ def get_news_headlines(symbol, limit=5):
         }
         r = requests.get(url, params=params).json()
         return [a["title"] for a in r.get("articles", []) if "title" in a]
-    except Exception as e:
-        print(f"❌ NewsAPI error for {symbol}: {e}")
+    except:
         return []
 
 def log_trade(symbol, typ, qty, price):
@@ -100,6 +88,9 @@ def log_trade(symbol, typ, qty, price):
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     log.append({"symbol": symbol, "type": typ, "qty": qty, "price": price, "timestamp": timestamp})
     save_json(TRADE_LOG_FILE, log)
+
+def save_price(symbol, price):
+    pass  # implement if using DB
 
 def trade():
     positions = load_json(POSITION_FILE, {})
@@ -121,24 +112,22 @@ def trade():
             continue
         if not any(any(good in h.lower() for good in good_words) for h in headlines):
             print(f"🟡 {symbol} skipped — no strong positive news")
-           
-
-# Total currently invested across all open positions
-        current_invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
-        remaining_allowance = MAX_INVESTED_PER_DAY - current_invested
-
-        if remaining_allowance <= 0:
-            print(f"🔒 Max daily investment reached. Skipping {symbol}")
             continue
 
-# Determine how much of remaining allowance to use
-        trade_usdt = min(remaining_allowance, balance["usdt"] * 0.25)
-        qty = round(trade_usdt / price, 6)
+        # Daily max check
+        current_invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
+        remaining_allowance = DAILY_MAX_INVEST - current_invested
+        if remaining_allowance <= 0:
+            print(f"🔒 Daily investment cap reached — skipping {symbol}")
+            continue
 
+        # Calculate qty (25% of USDT or remaining cap)
+        trade_usdt = min(balance["usdt"] * 0.25, remaining_allowance)
+        qty = math.floor((trade_usdt / price) * 1e6) / 1e6
 
         if symbol not in positions:
-            if qty * price > balance["usdt"]:
-                print(f"❌ Insufficient balance for {symbol}")
+            if qty <= 0 or qty * price > balance["usdt"]:
+                print(f"❌ Cannot buy {symbol} — qty too low or insufficient funds")
                 continue
 
             positions[symbol] = {"type": "LONG", "qty": qty, "entry": price}
@@ -163,53 +152,27 @@ def trade():
                 del positions[symbol]
                 log_trade(symbol, "CLOSE-LONG", qty, price)
 
-                send(
-                    f"✅ CLOSE {symbol} at ${price:.2f} — Profit: ${profit:.2f} USDT (+{pnl:.2f}%) — {now}"
-                )
+                send(f"✅ CLOSE {symbol} at ${price:.2f} — Profit: ${profit:.2f} USDT (+{pnl:.2f}%) — {now}")
                 print(f"✅ CLOSE {symbol} at ${price:.2f} | Profit: ${profit:.2f} USDT (+{pnl:.2f}%)")
-                invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
-                total = balance["usdt"] + invested
-                send(f"📊 Updated Balance: ${total:.2f} USDT — {now}")
 
+        # Update and report balance
+        invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
+        total = balance["usdt"] + invested
+        send(f"📊 Updated Balance: ${total:.2f} USDT — {now}")
 
     save_json(POSITION_FILE, positions)
     save_json(BALANCE_FILE, balance)
 
-    invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
-    total = balance["usdt"] + invested
-    print(f"[{now}] Net balance: ${total:.2f}")
-    send(f"📊 Updated Balance: ${total:.2f} USDT — {now}")
-
-
-
-def place_order(symbol, side, qty):
-    if LIVE_MODE:
-        return client.create_order(
-            symbol=symbol,
-            side=side.upper(),
-            type="MARKET",
-            quantity=qty
-        )
-    else:
-        print(f"[SIMULATED] {side} {qty} {symbol}")
-        return {"simulated": True, "symbol": symbol, "side": side, "qty": qty}
-
 def main():
-    try:
-        init_db()
-        print("🤖 Trading bot started")
-        send("🤖 Trading bot running with news filtering")
-
-        while True:
-            try:
-                trade()
-            except Exception as e:
-                print(f"ERROR in trade(): {e}")
-                send(f"⚠️ Error in trade(): {e}")
-            time.sleep(300)
-    except Exception as e:
-        print(f"❌ Startup failed: {e}")
-        send(f"🚨 Bot failed to start: {e}")
+    print("🤖 Trading bot started.")
+    send("🤖 Trading bot is live.")
+    while True:
+        try:
+            trade()
+        except Exception as e:
+            print(f"ERROR: {e}")
+            send(f"⚠️ Bot error: {e}")
+        time.sleep(300)
 
 if __name__ == "__main__":
     main()
