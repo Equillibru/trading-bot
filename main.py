@@ -129,8 +129,8 @@ def trade():
         trade_usdt = min(balance["usdt"] * 0.25, remaining_allowance)
         qty = math.floor((trade_usdt / price) * 1e6) / 1e6
         if qty * price < 0.25:
-        print(f"⚠️ {symbol} skipped — trade value {qty * price:.4f} USDT below 0.25 minimum")
-            continue
+          print(f"⚠️ {symbol} skipped — trade value {qty * price:.4f} USDT below 0.25 minimum")
+          continue
 
         print(f"🔢 {symbol} → trade_usdt: {trade_usdt:.4f}, price: {price:.2f}, qty: {qty}")
         if qty <= 0:
