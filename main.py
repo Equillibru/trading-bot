@@ -112,7 +112,7 @@ def trade():
             continue
         if not any(any(good in h.lower() for good in good_words) for h in headlines):
             print(f"🟡 {symbol} skipped — no strong positive news")
-            continue
+            #continue
 
         # Daily max check
         current_invested = sum(p["qty"] * get_price(sym) for sym, p in positions.items())
@@ -124,6 +124,10 @@ def trade():
         # Calculate qty (25% of USDT or remaining cap)
         trade_usdt = min(balance["usdt"] * 0.25, remaining_allowance)
         qty = math.floor((trade_usdt / price) * 1e6) / 1e6
+        print(f"🔢 {symbol} → trade_usdt: {trade_usdt:.4f}, price: {price:.2f}, qty: {qty}")
+        if qty <= 0:
+            print(f"❌ Qty for {symbol} is zero — skipping")
+            continue
 
         if symbol not in positions:
             if qty <= 0 or qty * price > balance["usdt"]:
