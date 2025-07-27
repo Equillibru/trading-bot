@@ -1,0 +1,15 @@
+# Environment variables
+.env
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Databases and logs
+*.db
+positions.json
+balance.json
+trade_log.json
+
+# Misc
+*.log

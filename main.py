@@ -106,6 +106,12 @@ def trade():
         if not price:
             print(f"⚠️ No price for {symbol}")
             continue
+        codex/analyze-code
+        if not any(any(good in h.lower() for good in good_words) for h in headlines):
+            print(f"🟡 {symbol} skipped — no strong positive news")
+            continue
+
+        main
 
         save_price(symbol, price)
         print(f"🔍 {symbol} @ ${price:.2f}")
