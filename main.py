@@ -26,9 +26,9 @@ BALANCE_FILE = "balance.json"
 TRADE_LOG_FILE = "trade_log.json"
 TRADING_PAIRS = ["BTCUSDT", "ETHUSDT", "XRPUSDT", "SOLUSDT", "DOGEUSDT", "ENAUSDT", "PENGUUSDT", "TRXUSDT", 
                  "ADAUSDT", "PEPEUSDT", "BONKUSDT", "LTCUSDT", "BNBUSDT", "AVAXUSDT", "XLMUSDT", "UNIUSDT", 
-                 "CFXUSDT", "AAVEUSDT", "WIFUSDT", "KERNELUSDT", "BCHUSDT", "ARBUSDT", "PUMPUSDT", "ENSUSDT", 
-                 "DOTUSDT", "MNTUSDT", "CKBUSDT", "LINKUSDT", "TONUSDT", "NEARUSDT", "ETCUSDT", "CAKEUSDT", 
-                 "SHIBUSDT", "HYPEUSDT", "OPUSDT"]
+                 "CFXUSDT", "AAVEUSDT", "WIFUSDT", "KERNELUSDT", "BCHUSDT", "ARBUSDT", "ENSUSDT", 
+                 "DOTUSDT", "CKBUSDT", "LINKUSDT", "TONUSDT", "NEARUSDT", "ETCUSDT", "CAKEUSDT", 
+                 "SHIBUSDT", "OPUSDT"]
 
 bad_words = ["lawsuit", "ban", "hack", "crash", "regulation", "investigation"]
 good_words = ["surge", "rally", "gain", "partnership", "bullish", "upgrade", "adoption"]
