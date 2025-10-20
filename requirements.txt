@@ -1,7 +1,3 @@
 requests
 python-dotenv
-lxml
-langchain
-langchain-community
 python-binance
-textblob
